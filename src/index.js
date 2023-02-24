@@ -1,5 +1,5 @@
-import * as sheetEngine from "sheet-engine/dist/index.js"
-import * as db from "mercydb/dist/db.js"
+import { parseXlsxDocument } from "sheet-engine"
+import { db } from "mercydb"
 
 class StudentListSheetProvider {
   constructor() {
@@ -7,7 +7,7 @@ class StudentListSheetProvider {
   }
 
   create(context) {
-    return StudentListSheetLoader(context.sql)
+    return new StudentListSheetLoader(context.sql)
   }
 }
 
@@ -18,27 +18,30 @@ class StudentListSheetLoader {
   async load(sheet) {
     function findStartRowNumber() {
       for (let num = 1; num <= sheet.rowLength; num++) {
-        const row = sheet.rowOn(num)
-        if (parseInt(row[0]) !== undefined) {
-          return num
+        const row = sheet.onRow(num)
+        if (!isNaN(parseInt(row[0]))) {
+          return num + 1
         }
       }
       throw new Error("Can't find start row number")
     }
     const startRow = findStartRowNumber()
     for (let row = startRow; row <= sheet.rowLength; row++) {
-      const college = sheet.on(row, "B")
-      const studentID = sheet.on(row, "D")
-      const name = sheet.on(row, "E")
+      const college = sheet.at(row, "B")
+      const studentID = sheet.at(row, "D")
+      const name = sheet.at(row, "E")
+      if (college === undefined || studentID === undefined || name === undefined) {
+        return
+      }
       const student = await db.queryStudentByID(this.sql, studentID)
-      if (student === undefined) {
+      if (!student) {
         await db.addStudent(this.sql, {
           studentID: studentID,
           name: name,
           poorLevel: 0,
           currentPoint: 0,
           creationTime: new Date(),
-          phoneNumber: student.phoneNumber,
+          phoneNumber: null,
           college: college,
         })
       } else if (student.college !== college || student.name !== name) {
@@ -49,8 +52,20 @@ class StudentListSheetLoader {
     }
   }
 }
-
-const doc = sheetEngine.parseXlsxDocument(path)
-const sheet = doc.name2Sheet.get("16335")
-console.log(sheet.rowLength)
-console.log(sheet.onRow(16336))
+const path = ".\\StudentList.xlsx"
+const doc = parseXlsxDocument(path)
+const sheet = doc.get("16335")
+const prov = new StudentListSheetProvider()
+import postgres from "postgres"
+const sql = postgres({
+  host: "localhost",
+  port: 5432,
+  database: "sit_mercy",
+  username: "sit_mercy",
+  password: "sit_mercy",
+});
+const loader = prov.create({
+  sql: sql
+})
+await loader.load(sheet)
+await sql.end()

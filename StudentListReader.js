@@ -1,9 +1,6 @@
-export default class StudentListSheetProvider {
-  constructor() {
-    this.name = "Student List Reader"
-    this.type = "StudentList"
-  }
-
+export default {
+  name: "Student List Reader",
+  type: "StudentList",
   create(context) {
     return new StudentListSheetLoader()
   }
